@@ -36,17 +36,6 @@ $array = $DB->next_record();
     You do not need to specify a result set - it uses $this-QueryID
 -----
 
-* Escaping a string
-
-db_string($str);
-    Is a wrapper for $DB->escape_str(), which is a wrapper for
-    mysqli_real_escape_string(). The db_string() function exists so that you
-    don't have to keep calling $DB->escape_str().
-
-    USE THIS FUNCTION EVERY TIME YOU USE AN UNVALIDATED USER-SUPPLIED VALUE IN
-    A DATABASE QUERY!
-
-
 //--------- Advanced usage ---------------------------------------------------------
 
 * The conventional way of retrieving a row from a result set is as follows:
@@ -117,35 +106,6 @@ set_query_id($ResultSet)
 
 if (!extension_loaded('mysqli')) {
     die('Mysqli Extension not loaded.');
-}
-
-function enum_boolean($bool) {
-    return $bool == true ? '1' : '0';
-}
-
-//Handles escaping
-function db_string($String, $DisableWildcards = false) {
-    global $DB;
-    //Escape
-    $String = $DB->escape_str($String);
-    //Remove user input wildcards
-    if ($DisableWildcards) {
-        $String = str_replace(array('%','_'), array('\%','\_'), $String);
-    }
-    return $String;
-}
-
-function db_array($Array, $DontEscape = [], $Quote = false) {
-    foreach ($Array as $Key => $Val) {
-        if (!in_array($Key, $DontEscape)) {
-            if ($Quote) {
-                $Array[$Key] = '\''.db_string(trim($Val)).'\'';
-            } else {
-                $Array[$Key] = db_string(trim($Val));
-            }
-        }
-    }
-    return $Array;
 }
 
 //TODO: revisit access levels once Drone is replaced by ZeRobot

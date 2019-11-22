@@ -12,16 +12,20 @@ $Redirects = [
 $PathInfo = pathinfo($_SERVER['SCRIPT_NAME']);
 $Document = $PathInfo['filename'];
 if ($PathInfo['dirname'] !== '/') {
-    header("Location: /index.php");
+	header("Location: /index.php");
+	die();
 }
 elseif (isset($Redirects[$Document])) {
-    $Seperator = (strpos($Redirects[$Document], "?") === false) ? "?" : "&";
-    $Rest = (!empty($_SERVER['QUERY_STRING'])) ? $Seperator.$_SERVER['QUERY_STRING'] : "";
-    header("Location: {$Redirects[$Document]}{$Rest}");
+	$Separator = (strpos($Redirects[$Document], "?") === false) ? "?" : "&";
+	$Rest = (!empty($_SERVER['QUERY_STRING'])) ? $Separator . $_SERVER['QUERY_STRING'] : "";
+	header("Location: {$Redirects[$Document]}{$Rest}");
+	die();
 }
-elseif (in_array($Document, ['announce', 'scrape'])) {
-    echo "d14:failure reason40:Invalid .torrent, try downloading again.e";
-    die();
+elseif (in_array($Document, ['announce', 'scrape'])
+	|| isset($_REQUEST['info_hash']) && isset($_REQUEST['peer_id'])
+) {
+	// Deal with dumbasses
+	die("d14:failure reason40:Invalid .torrent, try downloading again.e");
 }
 
 $Valid = false;
@@ -88,4 +92,4 @@ if (!$Valid) {
     $_SERVER['SCRIPT_FILENAME'] = 'error.php';
     $Error = 404;
 }
-require('classes/script_start.php');
+require 'classes/script_start.php';

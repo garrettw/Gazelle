@@ -1,10 +1,5 @@
 <?php
 // Debug info for developers
-ini_set('max_execution_time',600);
-define('MAX_TIME', 20000); //Maximum execution time in ms
-define('MAX_ERRORS', 0); //Maxmimum errors, warnings, notices we will allow in a page
-define('MAX_MEMORY', 80 * 1024 * 1024); //Maximum memory used per pageload
-define('MAX_QUERIES', 30); //Maxmimum queries
 
 class DEBUG {
     public $Errors = [];

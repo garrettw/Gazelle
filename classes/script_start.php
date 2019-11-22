@@ -10,21 +10,17 @@
 /* generates the page are at the bottom.                */
 /*------------------------------------------------------*/
 /********************************************************/
-require __DIR__.'/config.php'; //The config contains all site wide configuration information
-
-// Autoload classes.
-require(SERVER_ROOT.'/classes/classloader.php');
 
 use Gazelle\Util\Crypto;
 use Twig\Loader\FilesystemLoader;
 use Twig\Environment;
 
-//Deal with dumbasses
-if (isset($_REQUEST['info_hash']) && isset($_REQUEST['peer_id'])) {
-    die('d14:failure reason40:Invalid .torrent, try downloading again.e');
-}
+// The config contains all site-wide configuration information
+require __DIR__ . '/config.php';
 
-require(SERVER_ROOT.'/classes/proxies.class.php');
+// Autoload classes.
+require SERVER_ROOT . '/classes/classloader.php';
+require SERVER_ROOT . '/classes/util.php';
 
 // Get the user's actual IP address if they're proxied.
 if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])
@@ -41,44 +37,50 @@ else if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])
 }
 
 $SSL = (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+
+// Skip this block if running from cli or if the browser is old and shitty
 if (!isset($argv) && !empty($_SERVER['HTTP_HOST'])) {
-//Skip this block if running from cli or if the browser is old and shitty
-    if (!$SSL && $_SERVER['HTTP_HOST'] == 'www.'.NONSSL_SITE_URL) {
-        header('Location: http://'.NONSSL_SITE_URL.$_SERVER['REQUEST_URI']); die();
+    if ($_SERVER['HTTP_HOST'] == 'www.' . NONSSL_SITE_URL) {
+        if ($SSL) {
+            header('Location: https://' . SSL_SITE_URL . $_SERVER['REQUEST_URI']);
+        }
+        else {
+            header('Location: http://' . NONSSL_SITE_URL . $_SERVER['REQUEST_URI']);
+        }
+        die();
     }
-    if ($SSL && $_SERVER['HTTP_HOST'] == 'www.'.NONSSL_SITE_URL) {
-        header('Location: https://'.SSL_SITE_URL.$_SERVER['REQUEST_URI']); die();
-    }
+
     if (SSL_SITE_URL != NONSSL_SITE_URL) {
         if (!$SSL && $_SERVER['HTTP_HOST'] == SSL_SITE_URL) {
-            header('Location: https://'.SSL_SITE_URL.$_SERVER['REQUEST_URI']); die();
+            header('Location: https://' . SSL_SITE_URL . $_SERVER['REQUEST_URI']);
+            die();
         }
         if ($SSL && $_SERVER['HTTP_HOST'] == NONSSL_SITE_URL) {
-            header('Location: https://'.SSL_SITE_URL.$_SERVER['REQUEST_URI']); die();
+            header('Location: https://' . SSL_SITE_URL . $_SERVER['REQUEST_URI']);
+            die();
         }
     }
-    if ($_SERVER['HTTP_HOST'] == 'www.m.'.NONSSL_SITE_URL) {
-        header('Location: http://m.'.NONSSL_SITE_URL.$_SERVER['REQUEST_URI']); die();
+    if ($_SERVER['HTTP_HOST'] == 'www.m.' . NONSSL_SITE_URL) {
+        header('Location: http://m.' . NONSSL_SITE_URL . $_SERVER['REQUEST_URI']);
+        die();
     }
 }
 
-$ScriptStartTime = microtime(true); //To track how long a page takes to create
+// To track how long a page takes to create
+$ScriptStartTime = microtime(true);
 if (!defined('PHP_WINDOWS_VERSION_MAJOR')) {
     $RUsage = getrusage();
     $CPUTimeStart = $RUsage['ru_utime.tv_sec'] * 1000000 + $RUsage['ru_utime.tv_usec'];
 }
 
-ob_start(); //Start a buffer, mainly in case there is a mysql error
+//Start a buffer, mainly in case there is a mysql error
+ob_start();
 
 set_include_path(SERVER_ROOT);
 
-require(SERVER_ROOT.'/classes/debug.class.php'); //Require the debug class
-require(SERVER_ROOT.'/classes/mysql.class.php'); //Require the database wrapper
-require(SERVER_ROOT.'/classes/cache.class.php'); //Require the caching class
-require(SERVER_ROOT.'/classes/time.class.php'); //Require the time class
-require(SERVER_ROOT.'/classes/paranoia.class.php'); //Require the paranoia check_paranoia function
-require(SERVER_ROOT.'/classes/regex.php');
-require(SERVER_ROOT.'/classes/util.php');
+require SERVER_ROOT . '/classes/mysql.class.php'; // database wrapper
+require SERVER_ROOT . '/classes/cache.class.php';
+require SERVER_ROOT . '/classes/regex.php';
 
 $Debug = new DEBUG;
 $Debug->handle_errors();
@@ -94,7 +96,7 @@ G::$Twig = new Environment(
     ['cache' => __DIR__.'/../cache/twig']
 );
 
-//Begin browser identification
+// Begin browser identification
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -104,16 +106,16 @@ if (!isset($_SESSION['WhichBrowser'])) {
     $Result = new WhichBrowser\Parser($_SERVER['HTTP_USER_AGENT']);
     $_SESSION['WhichBrowser'] = [
         'Browser' => $Result->browser->getName(),
-        'BrowserVersion' => explode('.',$Result->browser->getVersion())[0],
+        'BrowserVersion' => explode('.', $Result->browser->getVersion())[0],
         'OperatingSystem' => $Result->os->getName(),
         'OperatingSystemVersion' => $Result->os->getVersion()
     ];
     $Debug->set_flag('end parsing user agent');
 }
 
-$Browser = $_SESSION['WhichBrowser']['Browser'];
-$BrowserVersion = $_SESSION['WhichBrowser']['BrowserVersion'];
-$OperatingSystem = $_SESSION['WhichBrowser']['OperatingSystem'];
+$Browser                = $_SESSION['WhichBrowser']['Browser'];
+$BrowserVersion         = $_SESSION['WhichBrowser']['BrowserVersion'];
+$OperatingSystem        = $_SESSION['WhichBrowser']['OperatingSystem'];
 $OperatingSystemVersion = $_SESSION['WhichBrowser']['OperatingSystemVersion'];
 
 $Debug->set_flag('start user handling');
@@ -317,87 +319,6 @@ if (isset($LoginCookie)) {
 
 $Debug->set_flag('end user handling');
 
-$Debug->set_flag('start function definitions');
-
-/**
- * Log out the current session
- */
-function logout() {
-    global $SessionID;
-    setcookie('session', '', time() - 60 * 60 * 24 * 365, '/', '', false);
-    setcookie('keeplogged', '', time() - 60 * 60 * 24 * 365, '/', '', false);
-    setcookie('session', '', time() - 60 * 60 * 24 * 365, '/', '', false);
-    if ($SessionID) {
-
-        G::$DB->query("
-            DELETE FROM users_sessions
-            WHERE UserID = '" . G::$LoggedUser['ID'] . "'
-                AND SessionID = '".db_string($SessionID)."'");
-
-        G::$Cache->begin_transaction('users_sessions_' . G::$LoggedUser['ID']);
-        G::$Cache->delete_row($SessionID);
-        G::$Cache->commit_transaction(0);
-    }
-    G::$Cache->delete_value('user_info_' . G::$LoggedUser['ID']);
-    G::$Cache->delete_value('user_stats_' . G::$LoggedUser['ID']);
-    G::$Cache->delete_value('user_info_heavy_' . G::$LoggedUser['ID']);
-
-    header('Location: login.php');
-
-    die();
-}
-
-/**
- * Logout all sessions
- */
-function logout_all_sessions() {
-    $UserID = G::$LoggedUser['ID'];
-
-    G::$DB->query("
-        DELETE FROM users_sessions
-        WHERE UserID = '$UserID'");
-
-    G::$Cache->delete_value('users_sessions_' . $UserID);
-    logout();
-}
-
-function enforce_login() {
-    global $SessionID;
-    if (!$SessionID || !G::$LoggedUser) {
-        setcookie('redirect', $_SERVER['REQUEST_URI'], time() + 60 * 30, '/', '', false);
-        logout();
-    }
-}
-
-/**
- * Make sure $_GET['auth'] is the same as the user's authorization key
- * Should be used for any user action that relies solely on GET.
- *
- * @param bool Are we using ajax?
- * @return bool authorisation status. Prints an error message to LAB_CHAN on IRC on failure.
- */
-function authorize($Ajax = false) {
-    if (empty($_REQUEST['auth']) || $_REQUEST['auth'] != G::$LoggedUser['AuthKey']) {
-        send_irc("PRIVMSG ".LAB_CHAN." :".G::$LoggedUser['Username']." just failed authorize on ".$_SERVER['REQUEST_URI'].(!empty($_SERVER['HTTP_REFERER']) ? " coming from ".$_SERVER['HTTP_REFERER'] : ""));
-        error('Invalid authorization key. Go back, refresh, and try again.', $Ajax);
-        return false;
-    }
-    return true;
-}
-
-function authorizeIfPost($Ajax = false) {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (empty($_POST['auth']) || $_POST['auth'] != G::$LoggedUser['AuthKey']) {
-            send_irc("PRIVMSG " . LAB_CHAN . " :" . G::$LoggedUser['Username'] . " just failed authorize on " . $_SERVER['REQUEST_URI'] . (!empty($_SERVER['HTTP_REFERER']) ? " coming from " . $_SERVER['HTTP_REFERER'] : ""));
-            error('Invalid authorization key. Go back, refresh, and try again.', $Ajax);
-            return false;
-        }
-    }
-    return true;
-}
-
-$Debug->set_flag('ending function definitions');
-
 //Include /sections/*/index.php
 $Document = basename(parse_url($_SERVER['SCRIPT_NAME'], PHP_URL_PATH), '.php');
 if (!preg_match('/^[a-z0-9]+$/i', $Document)) {
@@ -422,14 +343,14 @@ $AllowedPages = ['staffpm', 'ajax', 'locked', 'logout', 'login'];
 
 G::$Router = new \Gazelle\Router(G::$LoggedUser['AuthKey']);
 if (isset(G::$LoggedUser['LockedAccount']) && !in_array($Document, $AllowedPages)) {
-    require(SERVER_ROOT . '/sections/locked/index.php');
+    require SERVER_ROOT . '/sections/locked/index.php';
 }
 else {
     if (!file_exists(SERVER_ROOT . '/sections/' . $Document . '/index.php')) {
         error(404);
     }
     else {
-        require(SERVER_ROOT . '/sections/' . $Document . '/index.php');
+        require SERVER_ROOT . '/sections/' . $Document . '/index.php';
     }
 }
 
